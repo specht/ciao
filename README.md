@@ -7,3 +7,5 @@ Compile with `make`, run with `./ciao out.pbm`. Tested on Linux!
 This will render the following image:
 
 ![Spheres](https://i.imgur.com/aXrVCJs.png)
+
+More information can be found [here](https://imgur.com/a/tbusM1l).
