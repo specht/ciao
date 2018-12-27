@@ -21,7 +21,7 @@ struct r_node {
 struct r_quadtree {
     std::vector<r_node*> nodes;
     unsigned char min_level, max_level, extra_levels;
-    float xs, ys, scale1;
+    float xs, ys, scale1, dim;
     r_obj* obj;
     
     r_quadtree(r_obj* _obj, float x0, float x1, float y0, float y1, float scale, int _extra_levels);
@@ -31,6 +31,6 @@ struct r_quadtree {
     void load_from_file(const char* path);
     void save_to_file(const char* path);
     void dump();
+    void save_to_texture_recurse(int mag, unsigned char* buffer, uint32_t p, int level, int x, int y);
     void save_to_texture(const char* path);
 };
-

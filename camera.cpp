@@ -74,54 +74,77 @@ float r_camera::trace(const r_vec3d& from, const r_vec3d& dir, int recursions_le
         return dir.y * 1.5 + 0.2;
 }
 
-float r_camera::get_color(float sx, float sy, int level, int max_level)
+float r_camera::get_color(float sx, float sy, int level, int max_level, int recursions_left)
 {
     if (level < max_level)
     {
         float step = 1.0 / (1 << level);
         float step2 = step * 0.5;
-        return (get_color(sx, sy, level + 1, max_level) +
-                get_color(sx + step2, sy, level + 1, max_level) +
-                get_color(sx, sy + step2, level + 1, max_level) + 
-                get_color(sx + step2, sy + step2, level + 1, max_level)) * 0.25;
+        return (get_color(sx, sy, level + 1, max_level, recursions_left) +
+                get_color(sx + step2, sy, level + 1, max_level, recursions_left) +
+                get_color(sx, sy + step2, level + 1, max_level, recursions_left) + 
+                get_color(sx + step2, sy + step2, level + 1, max_level, recursions_left)) * 0.25;
     }
     else
     {
         r_vec3d v;
         mkray(&v, sx, sy);
-        return trace(from, v, 1);
+        return trace(from, v, recursions_left);
     }
 }
 
-void r_camera::render(FILE* f, int aa_level, float* _sum)
+void r_camera::render(FILE* f, int aa_level, int recursions_left, float* _sum)
 {
+    if (shading_pass && !LIGHT_FRAME_MASK)
+    {
+        // create light frame mask if it doesn't already exist
+        LIGHT_FRAME_MASK = new unsigned char[LIGHT_FRAME_SIZE * LIGHT_FRAME_SIZE];
+        LIGHT_FRAME_SUM = 0;
+        for (int ly = 0; ly < LIGHT_FRAME_SIZE; ly++)
+        {
+            float fy = ((float)ly / (LIGHT_FRAME_SIZE - 1) - 0.5) * 2;
+            for (int lx = 0; lx < LIGHT_FRAME_SIZE; lx++)
+            {
+                float fx = ((float)lx / (LIGHT_FRAME_SIZE - 1) - 0.5) * 2;
+                float f = 1.0 - (fx * fx + fy * fy);
+                if (f < 0.0) f = 0.0;
+                if (f > 1.0) f = 1.0;
+                unsigned char c = round(f * 255.0);
+                LIGHT_FRAME_SUM += c;
+                LIGHT_FRAME_MASK[ly * LIGHT_FRAME_SIZE + lx] = c;
+            }
+        }
+    }
     if (f) fprintf(f, "P2 %d %d %d\n", width, height, 255);
     float sum = 0;
     for (int y = 0; y < height; y++)
     {
         for (int x = 0; x < width; x++)
         {
-            float c = get_color(x, y, 0, aa_level);
-            if (!shading_pass)
+            // in shading pass, skip pixels that don't contribute
+            float c = 0;
+            if (!(shading_pass && (!LIGHT_FRAME_MASK[y * LIGHT_FRAME_SIZE + x])))
             {
-                c = 1.0 - exp(-c * 1);
-                // add some screen space noise
-                c += (((float)rand() / RAND_MAX) - 0.5) * 0.03;
+                c = get_color(x, y, 0, aa_level, recursions_left);
+                if (shading_pass)
+                {
+                    c *= (float)LIGHT_FRAME_MASK[y * LIGHT_FRAME_SIZE + x] / 255.0;
+                }
+                else
+                {
+                    c = 1.0 - exp(-c * 1);
+                    // add some screen space noise
+                    c += (((float)rand() / RAND_MAX) - 0.5) * 0.03;
+                }
+                // clamp color value
+                if (c < 0.0) c = 0.0; else if (c > 1.0) c = 1.0;
             }
-            if (shading_pass)
-            {
-                float r = ((float)x - w2) * ((float)x - w2) +
-                          ((float)y - h2) * ((float)y - h2);
-                c *= (1 - r / (width * height / 4));
-            }
-            // clamp color value
-            if (c < 0.0) c = 0.0; else if (c > 1.0) c = 1.0;
             sum += c;
             unsigned char color = round(c * 255.0);
             if (f) fprintf(f, "%d ", color);
         }
     }
     if (_sum)
-        *_sum = sum / (width * height);
+        *_sum = sum * 255.0 / LIGHT_FRAME_SUM;
 }
 

@@ -1,6 +1,7 @@
 #include "quadtree.h"
 #include <stdio.h>
 #include <math.h>
+#include <string.h>
 
 r_node::r_node()
     : parent(0)
@@ -29,20 +30,19 @@ r_node::~r_node()
 r_quadtree::r_quadtree(r_obj* _obj, float x0, float x1, float y0, float y1, float scale, int _extra_levels)
     : obj(_obj)
 {
-    fprintf(stderr, "sizeof r_node: %d\n", sizeof(r_node));
+//     fprintf(stderr, "sizeof r_node: %d\n", sizeof(r_node));
     float w = x1 - x0;
     float h = y1 - y0;
-    float dim = (w > h) ? w : h;
+    dim = (w > h) ? w : h;
     xs = x0;
     ys = y0;
     scale1 = 1.0 / scale;
     extra_levels = _extra_levels;
     min_level = 0;
-    fprintf(stderr, "dim = %1.4f\n", dim);
     while (min_level < 32 && (1 << min_level) < dim * scale1)
         min_level += 1;
     max_level = min_level + extra_levels;
-        fprintf(stderr, "levels: %d - %d, scale1: %1.2f\n", min_level, min_level + extra_levels, scale1);
+//     fprintf(stderr, "levels: %d - %d, scale1: %1.2f\n", min_level, min_level + extra_levels, scale1);
     r_node* root = new r_node();
     for (int y = 0; y < 2; y++)
     {
@@ -51,7 +51,6 @@ r_quadtree::r_quadtree(r_obj* _obj, float x0, float x1, float y0, float y1, floa
             int offset = y * 2 + x;
             float fx = xs + (x << min_level) / scale1;
             float fy = ys + (y << min_level) / scale1;
-            fprintf(stderr, "init #%d: %1.2f, %1.2f\n", offset, fx, fy);
             float v = obj->calculate_occlusion(fx, fy, obj->scene);
             int c = round(v * 255.0);
             if (c < 0) c = 0;
@@ -60,102 +59,98 @@ r_quadtree::r_quadtree(r_obj* _obj, float x0, float x1, float y0, float y1, floa
         }
     }
     nodes.push_back(root);
+    // load existing quadtree data if available
+    load_from_file(obj->lm_path);
 }
 
 void r_quadtree::insert(float _x, float _y)
 {
     int x = (int)(floor((_x - xs) * scale1 * (1 << extra_levels)));
     int y = (int)(floor((_y - ys) * scale1 * (1 << extra_levels)));
-    int level = 0;
-    int level1 = max_level;
+    int level = 1;
+    int level1 = max_level - 1;
     unsigned int node_index = 0;
     r_node* node = nodes.at(node_index);
-    float step = (1 << min_level);
+    float step = dim * 0.5;
     float px = xs;
     float py = ys;
-    fprintf(stderr, "inserting at %1.4f, %1.4f => %d, %d, step = %1.4f\n", _x, _y, x, y, step);
-    while (true) 
+//     fprintf(stderr, "inserting at (%1.4f, %1.4f) => (%d, %d), step = %1.4f\n", _x, _y, x, y, step);
+    while (level <= max_level) 
     {
         int ix = x >> level1;
         int iy = y >> level1;
-//         fprintf(stderr, "  (at %d, %d @ level %d)\n", ix, iy, level);
-        if ((((ix << level1) != x) || ((iy << level1) != y)) && level < max_level)
+        int cx = (x >> level1) & 1;
+        int cy = (y >> level1) & 1;
+        unsigned char offset = cy * 2 + cx;
+        px += cx * step;
+        py += cy * step;
+//         fprintf(stderr, "  [%d,%d] (at (%d, %d) / (%1.4f, %1.4f) @ level %d, step = %1.4f)\n", 
+//                 cx, cy, ix, iy,
+//                 px, py, level, step);
+        if (node->children[offset])
         {
-            int cx = (x >> (level1 - 1)) & 1;
-            int cy = (y >> (level1 - 1)) & 1;
-            unsigned char offset = cy * 2 + cx;
-            px += cx * step;
-            py += cy * step;
-            step *= 0.5;
-            if (node->children[offset])
-            {
-                // child already exists
-//                 fprintf(stderr, ".");
-                node = nodes.at(node->children[offset]);
-            }
-            else
-            {
-                fprintf(stderr, "+");
-                r_node* parent = node;
-                node->children[offset] = nodes.size();
-                node = new r_node();
-//                 fprintf(stderr, "adding node #%d\n", nodes.size());
-                nodes.push_back(node);
-                node->parent = node_index;
-                node_index = nodes.size() - 1;
-                for (int cy = 0; cy < 2; cy++)
-                {
-                    for (int cx = 0; cx < 2; cx++)
-                    {
-                        unsigned char co = cy * 2 + cx;
-                        if (co == offset)
-                        {
-                            // re-use value from parent
-//                             fprintf(stderr, "re-using occlusion for %1.4f, %1.4f\n", px + cx * step, py + cy * step);
-                            node->v[co] = parent->v[offset];
-                        }
-                        else
-                        {
-//                             fprintf(stderr, "calculate_occlusion for %1.4f, %1.4f\n", px + cx * step, py + cy * step);
-                            float v = obj->calculate_occlusion(px + cx * step, py + cy * step, obj->scene);
-                            int c = round(v * 255.0);
-                            if (c < 0) c = 0;
-                            if (c > 255) c = 255;
-                            node->v[co] = c;
-                        }
-                    }
-                }
-                int min = node->v[0];
-                int max = node->v[0];
-                for (int i = 1; i < 4; i++)
-                {
-                    if (node->v[i] < min) min = node->v[i];
-                    if (node->v[i] > max) max = node->v[i];
-                }
-                if ((level >= min_level) && ((max - min) < 8))
-                    break;
-            }
-//             fprintf(stderr, "  %d %d\n", cx, cy);
-            level += 1;
-            level1 -= 1;
+            // child already exists
+//             fprintf(stderr, ".");
+            node_index = node->children[offset];
+            node = nodes.at(node_index);
         }
         else
+        {
+//             fprintf(stderr, "+");
+            r_node* parent = node;
+            node->children[offset] = nodes.size();
+            node = new r_node();
+//                 fprintf(stderr, "adding node #%d\n", nodes.size());
+            nodes.push_back(node);
+            node->parent = node_index;
+            node_index = nodes.size() - 1;
+            for (int cy = 0; cy < 2; cy++)
+            {
+                for (int cx = 0; cx < 2; cx++)
+                {
+                    unsigned char co = cy * 2 + cx;
+                    if (co == offset)
+                    {
+                        // re-use value from parent
+//                             fprintf(stderr, "re-using occlusion for %1.4f, %1.4f\n", px + cx * step, py + cy * step);
+                        node->v[co] = parent->v[offset];
+                    }
+                    else
+                    {
+//                             fprintf(stderr, "calculate_occlusion for %1.4f, %1.4f\n", px + cx * step, py + cy * step);
+                        float v = obj->calculate_occlusion(px + cx * step, py + cy * step, obj->scene);
+                        int c = round(v * 255.0);
+                        if (c < 0) c = 0;
+                        if (c > 255) c = 255;
+                        node->v[co] = c;
+                    }
+                }
+            }
+        }
+        int min = node->v[0];
+        int max = node->v[0];
+        for (int i = 1; i < 4; i++)
+        {
+            if (node->v[i] < min) min = node->v[i];
+            if (node->v[i] > max) max = node->v[i];
+        }
+//         fprintf(stderr, "%d %d\n", level, max - min);
+        if ((level >= min_level) && ((max - min) < 16))
             break;
+//             fprintf(stderr, "  %d %d\n", cx, cy);
+        step *= 0.5;
+        level += 1;
+        level1 -= 1;
     }
 }
 
 float r_quadtree::query(float _x, float _y, bool insert_value)
 {
-//     if (!insert_value)
-//     {
-//         float v = obj->calculate_occlusion(_x, _y, obj->scene);
-//         return v;
-//     }
     if (insert_value)
         insert(_x, _y);
     
-    int x = (int)(floor((_x - xs) * scale1 * (1 << extra_levels)));
-    int y = (int)(floor((_y - ys) * scale1 * (1 << extra_levels)));
+    int x = (int)(floor((_x - xs) * scale1 * (1 << extra_levels << 8)));
+    int y = (int)(floor((_y - ys) * scale1 * (1 << extra_levels << 8)));
     int level = 0;
     int level1 = max_level;
     unsigned int node_index = 0;
@@ -165,29 +160,26 @@ float r_quadtree::query(float _x, float _y, bool insert_value)
     float py = ys;
     while (true) 
     {
-//         int ix = x >> level1;
-//         int iy = y >> level1;
-//         if ((((ix << level1) != x) || ((iy << level1) != y)) && level < max_level)
-//         {
-            int cx = (x >> (level1 - 1)) & 1;
-            int cy = (y >> (level1 - 1)) & 1;
-            unsigned char offset = cy * 2 + cx;
-            px += cx * step;
-            py += cy * step;
-            step *= 0.5;
-            if (node->children[offset])
-            {
-                node = nodes.at(node->children[offset]);
-            }
-            else
-                break;
-            level += 1;
-            level1 -= 1;
-//         }
-//         else
-//             break;
+        int cx = (x >> (level1 - 1) >> 8) & 1;
+        int cy = (y >> (level1 - 1) >> 8) & 1;
+        unsigned char offset = cy * 2 + cx;
+        px += cx * step;
+        py += cy * step;
+        step *= 0.5;
+        if (node->children[offset])
+            node = nodes.at(node->children[offset]);
+        else
+            break;
+        level += 1;
+        level1 -= 1;
     }
-    return (node->v[0] + node->v[1] + node->v[2] + node->v[3]) * 0.25 / 255.0;
+    int fx = (x >> (level1)) & 0xff;
+    int fy = (y >> (level1)) & 0xff;
+    int lv = ((int)node->v[2] * fy + (int)node->v[0] * (fy ^ 0xff)) >> 8;
+    int rv = ((int)node->v[3] * fy + (int)node->v[1] * (fy ^ 0xff)) >> 8;
+    int v = (rv * fx + lv * (fx ^ 0xff)) >> 8;
+    return (float)v / 255.0;
+//     return (node->v[0] + node->v[1] + node->v[2] + node->v[3]) * 0.25 / 255.0;
 }
 
 void r_quadtree::load_from_file(const char* path)
@@ -197,11 +189,13 @@ void r_quadtree::load_from_file(const char* path)
         return;
     nodes.clear();
     r_node node;
-    while (!feof(f))
+    while (true)
     {
-        fread(&node.parent, 4, 1, f);
+        size_t bytes_read = fread(&node.parent, 1, 4, f);
+        if (bytes_read < 4)
+            break;
         for (int k = 0; k < 4; k++)
-            fread(&node.children[k], 4, 1, f);
+            fread(&node.children[k], 1, 4, f);
         for (int k = 0; k < 4; k++)
             fread(&node.v[k], 1, 1, f);
         nodes.push_back(new r_node(node));
@@ -243,21 +237,60 @@ void r_quadtree::dump()
     }
 }
 
+void r_quadtree::save_to_texture_recurse(int mag, unsigned char* buffer, uint32_t p, int level, int x, int y)
+{
+    r_node* node = nodes.at(p);
+//     return;
+    int width = (1 << (max_level - (level - min_level))) * mag;
+    int dim = 1 << max_level;
+    int vl = (int)(nodes.at(p)->v[0]) << 8;
+    int vld = ((int)nodes.at(p)->v[2] - nodes.at(p)->v[0]) * 256 / width;
+    int vr = (int)(nodes.at(p)->v[1]) << 8;
+    int vrd = ((int)nodes.at(p)->v[3] - nodes.at(p)->v[1]) * 256 / width;
+    for (int py = 0; py < width; py++)
+    {
+        int v = vl;
+        int vd = ((int)vr - vl) * 256 / width / 256;
+        for (int px = 0; px < width; px++)
+        {
+            buffer[(py + y) * dim * mag + px + x] = v >> 8;
+            v += vd;
+        }
+        vl += vld; vr += vrd;
+    }
+    for (int cy = 0; cy < 2; cy++)
+    {
+        for (int cx = 0; cx < 2; cx++)
+        {
+            int c = cy * 2 + cx;
+            if (nodes.at(p)->children[c])
+                save_to_texture_recurse(mag, buffer, nodes.at(p)->children[c],
+                                        level + 1,
+                                        x + cx * width / 2,
+                                        y + cy * width / 2);
+        }
+    }
+    unsigned char border_color = 0;
+    for (int i = 2; i < width - 2; i++)
+    {
+        buffer[(y + i) * dim * mag + x] = border_color;
+        buffer[(y + i) * dim * mag + x + width] = border_color;
+        buffer[y * dim * mag + x + i] = border_color;
+        buffer[(y + width) * dim * mag + x + i] = border_color;
+    }
+}
+
 void r_quadtree::save_to_texture(const char* path)
 {
     FILE* f = fopen(path, "w");
-    int dim = 1 << max_level;
+    int mag = 1;
+    int dim = (1 << max_level) * mag;
     fprintf(f, "P2 %d %d %d\n", dim, dim, 255);
-    for (int y = 0; y < dim; y++)
-    {
-        for (int x = 0; x < dim; x++)
-        {
-            float v = query(xs + x, ys + y, false);
-            int c = round(v * 255.0);
-            if (c < 0) c = 0;
-            if (c > 255) c = 255;
-            fprintf(f, "%d ", c);
-        }
-    }
+    unsigned char* buffer = new unsigned char[dim * dim];
+    memset(buffer, 0, dim * dim);
+    save_to_texture_recurse(mag, buffer, 0, min_level, 0, 0);
+    for (int i = 0; i < dim * dim; i++)
+        fprintf(f, "%d ", buffer[i]);
+    delete [] buffer;
     fclose(f);
 }

@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS =
+CFLAGS = -g
 DEPS = vec3d.h
 OBJ = \
 	camera.o \

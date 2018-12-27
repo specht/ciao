@@ -12,9 +12,33 @@
 r_scene scene;
     
 struct r_floor_disc: r_obj {
-    r_floor_disc(r_scene* scene)
+    float r, r2; 
+    r_vec3d anchor, n, u, v;
+    
+    r_floor_disc(r_scene* scene, const r_vec3d& _p, const r_vec3d& _n, float _radius)
         : r_obj(scene)
+        , anchor(_p)
+        , n(_n)
+        , r(_radius)
+        , r2(_radius * _radius)
     {
+        n.normalize();
+        shading = new r_quadtree(this, -r, r, -r, r, 0.5, 5);
+        float lmax = 0.0;
+        for (int i = 0; i < 3; i++)
+        {
+            r_vec3d t = r_vec3d(i == 0 ? 1 : 0, i == 1 ? 1 : 0, i == 2 ? 1 : 0);
+            t.cross(n);
+            float l = t.dot(t);
+            if (l > lmax)
+            {
+                lmax = l;
+                u = t;
+            }
+        }
+        u.normalize();
+        v = u;
+        v.cross(n);
     }
     
     virtual ~r_floor_disc()
@@ -23,15 +47,18 @@ struct r_floor_disc: r_obj {
     
     virtual bool intersect(float* t, const r_vec3d& from, const r_vec3d& dir)
     {
-        if (fabs(dir.y) > 0.0001)
+        r_vec3d f(from);
+        f.subtract(anchor);
+        float d = dir.dot(n);
+        if (fabs(d) > EPSILON)
         {
-            *t = -(from.y / dir.y);
-            if (*t > 0.0)
+            *t = -n.dot(f) / d;
+            if (*t > EPSILON)
             {
                 r_vec3d x(dir);
                 x.multiply(*t);
-                x.add(from);
-                if (x.x * x.x + x.z * x.z < 64)
+                x.add(f);
+                if (x.x * x.x + x.z * x.z < r2)
                 {
                     return true;
                 }
@@ -42,37 +69,49 @@ struct r_floor_disc: r_obj {
     
     virtual float shade(const r_vec3d& from, const r_vec3d& dir, const r_vec3d& p, void* camera, int recursions_left)
     {
-        float l = shading->query(p.x, p.z);
+        r_vec3d temp(p);
+        temp.subtract(anchor);
+        float l = shading->query(u.dot(temp), v.dot(temp));
+//         float l = 1.0;
         r_vec3d x(p);
-        x.multiply(0.5);
-        bool fx = (x.x - floor(x.x)) < 0.5;
-        bool fz = (x.z - floor(x.z)) < 0.5;
-        return (fx ^ fz) ? 0.9 * l: 0.5 * l;
+        x.subtract(anchor);
+        float uc = u.dot(x) * 0.5;
+        float vc = v.dot(x) * 0.5;
+        bool fu = (uc - floor(uc)) < 0.5;
+        bool fv = (vc - floor(vc)) < 0.5;
+        return (fu ^ fv) ? 0.9 * l: 0.5 * l;
+//         return 0.9 * l;
     }
 
     virtual float calculate_occlusion(float x, float y, r_scene* scene)
     {
-        r_vec3d s_from(x, 0.0001, y);
+        r_vec3d tu(u);
+        r_vec3d tv(v);
+        tu.multiply(x);
+        tv.multiply(y);
+        
+        r_vec3d s_from(anchor);
+        s_from.add(tu);
+        s_from.add(tv);
         r_vec3d at(s_from);
-        at.add(r_vec3d(0, 1, 0));
-        r_camera lc(64, 64, 0.4 * M_PI,
-            s_from, at, r_vec3d(1, 0, 0));
+        at.add(n);
+        // TODO experiment with size and antialiasing of this image
+        r_camera lc(LIGHT_FRAME_SIZE, LIGHT_FRAME_SIZE, 0.4 * M_PI,
+            s_from, at, u);
         lc.scene = scene;
         lc.shading_pass = true;
 
         FILE* f = NULL;
-        if ((float)rand() / RAND_MAX < 0.001)
-        {
-            char filename[256];
-            sprintf(filename, "lc_%1.5f_%1.5f.pgm", x, y);
-            f = fopen(filename, "w");
-        }
+//         if ((float)rand() / RAND_MAX < 0.001)
+//         {
+//             char filename[256];
+//             sprintf(filename, "%s_lc_%1.5f_%1.5f.pgm", lm_path, x, y);
+//             f = fopen(filename, "w");
+//         }
         float sum = 0.0;
-        lc.render(f, 0, &sum);
+        lc.render(f, LIGHT_FRAME_ANTIALIASING, 0, &sum);
         if (f) fclose(f);
-//         sum = 1.0 - exp(-sum * 5);
-        sum = pow(sum * 2.56, 2);
-//         fprintf(stderr, "occlusion: %1.4f\n", sum);
+//         fprintf(stderr, "%1.4f\n", sum);
         return sum;
     }
 };
@@ -101,9 +140,16 @@ struct r_sphere: r_obj {
         float dd = p2 * p2 - q;
         if (dd >= 0)
         {
-            *t = -p2 - sqrt(dd);
-            if (*t > 0.0)
+            dd = sqrt(dd);
+            *t = -p2 - dd;
+            if (*t > EPSILON)
                 return true;
+            else
+            {
+                *t = -p2 + dd;
+                if (*t > EPSILON)
+                    return true;
+            }
         }
         return false;
     }
@@ -120,8 +166,9 @@ struct r_sphere: r_obj {
             reflected.multiply(dir.dot(n));
             reflected.subtract(dir);
             reflected.multiply(-1);
+            reflected.normalize();
             r_vec3d t(reflected);
-            t.multiply(0.000001);
+            t.multiply(EPSILON * 2);
             t.add(p);
             return b + r * ((r_camera*)camera)->trace(t, reflected, recursions_left - 1);
         }
@@ -135,77 +182,30 @@ struct r_sphere: r_obj {
     }
 };
 
-struct r_quadtree_test: r_obj {
-    r_quadtree_test(r_scene* scene)
-        : r_obj(scene)
-    {
-    }
-    
-    virtual ~r_quadtree_test()
-    {
-    }
-    
-    virtual bool intersect(float* t, const r_vec3d& from, const r_vec3d& dir)
-    {
-        return false;
-    }
-    
-    virtual float shade(const r_vec3d& from, const r_vec3d& dir, const r_vec3d& p, void* camera, int recursions_left)
-    {
-        return 0.0;
-    }
-
-    virtual float calculate_occlusion(float x, float y, r_scene* scene)
-    {
-        x -= 1.0;
-        y -= 1.0;
-        float f = x * x + y * y < 1.0 ? 0.9 : 0.2;
-        fprintf(stderr, "(%1.2f %1.2f) => %1.2f\n", x, y, f);
-        return f;
-    }
-};
-
 int main(int argc, char** argv)
 {
-    scene.objects.push_back(new r_quadtree_test(&scene));
-    scene.objects.back()->shading = new r_quadtree(scene.objects.back(), 0, 2, 0, 2, 0.5, 0);
-    for (int y = 0; y <= 4; y++)
-        for (int x = 0; x <= 4; x++)
-            scene.objects.back()->calculate_occlusion((float)x / 2, (float)y / 2, NULL);
-    for (int y = 0; y <= 4; y++)
-        for (int x = 0; x <= 4; x++)
-            scene.objects.back()->shading->insert((float)x / 2, (float)y / 2);
-    scene.objects.at(0)->shading->save_to_texture("quadtree_test.pgm");
-    scene.objects.at(0)->shading->dump();
-    exit(0);
-    scene.objects.push_back(new r_floor_disc(&scene));
-    scene.objects.back()->shading = new r_quadtree(scene.objects.back(), -8, 8, -8, 8, 0.5, 2);
-    scene.objects.at(0)->shading->load_from_file("ao_plane.raw");
-    scene.objects.push_back(new r_sphere(&scene, r_vec3d(0, 2.01, 0), 2, 0.5, 0.5));
+    scene.objects.push_back(new r_floor_disc(&scene, r_vec3d(0, 0, 0), r_vec3d(0, 1, 0), 8));
+//     scene.objects.push_back(new r_floor_disc(&scene, r_vec3d(0, 0.4, 0), r_vec3d(-0.1, 1, 0), 1));
+//     scene.objects.push_back(new r_floor_disc(&scene, r_vec3d(-1, 0.7, 0), r_vec3d(-0.2, 1, 0), 1));
+//     scene.objects.push_back(new r_floor_disc(&scene, r_vec3d(0, 0, 0), r_vec3d(-1, -0.8, 0), 2));
+    scene.objects.push_back(new r_sphere(&scene, r_vec3d(0, 2.01, 0), 2, 0.3, 0.7));
+    for (int i = 0; i < 16; i++)
+    {
+        float x = cos(M_PI * i / 8) * 2;
+        float y = sin(M_PI * i / 8) * 2;
+        scene.objects.push_back(new r_sphere(&scene, r_vec3d(x, 0.21, y), 0.2, 0.3, 0.7));
+    }
 
-    r_camera camera(512, 288, 20.0 / 180.0 * M_PI,
-//     r_camera camera(2, 2, 20.0 / 180.0 * M_PI,
+    r_camera camera(512 * 2, 288 * 2, 20.0 / 180.0 * M_PI,
         r_vec3d(-3, 1.3, 5),
         r_vec3d(0, 1, 0),
         r_vec3d(0.2, 1, 0)
     );
-//     r_camera camera(2, 2, 20.0 / 180.0 * M_PI,
-//         r_vec3d(0, 15, 0),
-//         r_vec3d(0, 0, 0),
-//         r_vec3d(1, 0, 0.2)
-//     );
     camera.scene = &scene;
     
     FILE *f = fopen(argv[1], "w");
-
-//     scene.objects.at(0)->shading->query(-9, -9);
-    camera.render(f, 3);
+    camera.render(f, 3, 3);
     fclose(f);
-    
-    scene.objects.at(0)->shading->dump();
-
-    scene.objects.at(0)->shading->save_to_file("ao_plane.raw");
-    scene.objects.at(0)->shading->save_to_texture("ao_plane.pbm");
     
     return 0;
 }

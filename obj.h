@@ -3,7 +3,6 @@
 struct r_quadtree;
 
 #include "vec3d.h"
-// #include "scene.h"
 #include <vector>
 
 struct r_scene;
@@ -11,6 +10,7 @@ struct r_scene;
 struct r_obj {
     r_quadtree* shading;
     r_scene* scene;
+    char lm_path[16];
     
     r_obj(r_scene* _scene);
     virtual ~r_obj();
