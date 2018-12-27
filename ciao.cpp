@@ -135,8 +135,49 @@ struct r_sphere: r_obj {
     }
 };
 
+struct r_quadtree_test: r_obj {
+    r_quadtree_test(r_scene* scene)
+        : r_obj(scene)
+    {
+    }
+    
+    virtual ~r_quadtree_test()
+    {
+    }
+    
+    virtual bool intersect(float* t, const r_vec3d& from, const r_vec3d& dir)
+    {
+        return false;
+    }
+    
+    virtual float shade(const r_vec3d& from, const r_vec3d& dir, const r_vec3d& p, void* camera, int recursions_left)
+    {
+        return 0.0;
+    }
+
+    virtual float calculate_occlusion(float x, float y, r_scene* scene)
+    {
+        x -= 1.0;
+        y -= 1.0;
+        float f = x * x + y * y < 1.0 ? 0.9 : 0.2;
+        fprintf(stderr, "(%1.2f %1.2f) => %1.2f\n", x, y, f);
+        return f;
+    }
+};
+
 int main(int argc, char** argv)
 {
+    scene.objects.push_back(new r_quadtree_test(&scene));
+    scene.objects.back()->shading = new r_quadtree(scene.objects.back(), 0, 2, 0, 2, 0.5, 0);
+    for (int y = 0; y <= 4; y++)
+        for (int x = 0; x <= 4; x++)
+            scene.objects.back()->calculate_occlusion((float)x / 2, (float)y / 2, NULL);
+    for (int y = 0; y <= 4; y++)
+        for (int x = 0; x <= 4; x++)
+            scene.objects.back()->shading->insert((float)x / 2, (float)y / 2);
+    scene.objects.at(0)->shading->save_to_texture("quadtree_test.pgm");
+    scene.objects.at(0)->shading->dump();
+    exit(0);
     scene.objects.push_back(new r_floor_disc(&scene));
     scene.objects.back()->shading = new r_quadtree(scene.objects.back(), -8, 8, -8, 8, 0.5, 2);
     scene.objects.at(0)->shading->load_from_file("ao_plane.raw");

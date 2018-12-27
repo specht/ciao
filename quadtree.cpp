@@ -38,18 +38,19 @@ r_quadtree::r_quadtree(r_obj* _obj, float x0, float x1, float y0, float y1, floa
     scale1 = 1.0 / scale;
     extra_levels = _extra_levels;
     min_level = 0;
+    fprintf(stderr, "dim = %1.4f\n", dim);
     while (min_level < 32 && (1 << min_level) < dim * scale1)
         min_level += 1;
     max_level = min_level + extra_levels;
-//         fprintf(stderr, "levels: %d - %d\n", min_level, min_level + extra_levels);
+        fprintf(stderr, "levels: %d - %d, scale1: %1.2f\n", min_level, min_level + extra_levels, scale1);
     r_node* root = new r_node();
     for (int y = 0; y < 2; y++)
     {
         for (int x = 0; x < 2; x++)
         {
             int offset = y * 2 + x;
-            float fx = xs + (x << min_level);
-            float fy = ys + (y << min_level);
+            float fx = xs + (x << min_level) / scale1;
+            float fy = ys + (y << min_level) / scale1;
             fprintf(stderr, "init #%d: %1.2f, %1.2f\n", offset, fx, fy);
             float v = obj->calculate_occlusion(fx, fy, obj->scene);
             int c = round(v * 255.0);
@@ -72,7 +73,7 @@ void r_quadtree::insert(float _x, float _y)
     float step = (1 << min_level);
     float px = xs;
     float py = ys;
-//     fprintf(stderr, "inserting at %d, %d, step = %1.4f\n", x, y, step);
+    fprintf(stderr, "inserting at %1.4f, %1.4f => %d, %d, step = %1.4f\n", _x, _y, x, y, step);
     while (true) 
     {
         int ix = x >> level1;
@@ -225,7 +226,6 @@ void r_quadtree::save_to_file(const char* path)
 
 void r_quadtree::dump()
 {
-    return;
     fprintf(stderr, "\n");
     for (int i = 0; i < nodes.size(); i++)
     {
@@ -246,10 +246,11 @@ void r_quadtree::dump()
 void r_quadtree::save_to_texture(const char* path)
 {
     FILE* f = fopen(path, "w");
-    fprintf(f, "P2 %d %d %d\n", 32, 32, 255);
-    for (int y = 0; y < 32; y++)
+    int dim = 1 << max_level;
+    fprintf(f, "P2 %d %d %d\n", dim, dim, 255);
+    for (int y = 0; y < dim; y++)
     {
-        for (int x = 0; x < 32; x++)
+        for (int x = 0; x < dim; x++)
         {
             float v = query(xs + x, ys + y, false);
             int c = round(v * 255.0);
