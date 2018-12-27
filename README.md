@@ -13,3 +13,5 @@ Run with:
 ```
 
 This will render the following image:
+
+![Spheres](https://i.imgur.com/aXrVCJs.png)
