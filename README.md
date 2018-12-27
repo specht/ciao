@@ -1,16 +1,8 @@
 # Cham's Ambient Occlusion Renderer
 
-Compile with:
+This is a _working work in progress_. It's a small raytracer which does quadtree-powered ambient occlusion.
 
-```
-make
-```
-
-Run with:
-
-```
-./ciao out.pbm
-```
+Compile with `make`, run with `./ciao out.pbm`. Tested on Linux!
 
 This will render the following image:
 
