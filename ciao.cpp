@@ -41,7 +41,7 @@ struct r_floor_disc: r_obj {
         u_base.normalize();
         v_base = u_base;
         v_base.cross(normal);
-//         shading = new r_quadtree(this, -r, r, -r, r, 0.125, 5);
+        shading = new r_quadtree(this, -r, r, -r, r, 0.125, 5);
     }
     
     virtual ~r_floor_disc()
@@ -287,7 +287,7 @@ int main(int argc, char** argv)
     camera.scene = &scene;
     
     FILE *f = fopen(argv[1], "w");
-    camera.render(f, 0, 3);
+    camera.render(f, 2, 3);
     fclose(f);
 
     delete diffuse;
