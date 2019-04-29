@@ -7,7 +7,8 @@ r_camera::r_camera(int _width, int _height, float _fov,
                    const r_vec3d& _up
         )
     : width(_width), height(_height), fov(_fov),
-        from(_from), at(_at), up(_up)
+      from(_from), at(_at), up(_up),
+      ignore_object(0)
 {
     shading_pass = false;
     w2 = (float)width * 0.5;
@@ -43,13 +44,16 @@ void r_camera::mkray(r_vec3d* v, float x, float y)
     v->normalize();
 }
 
-float r_camera::trace(const r_vec3d& from, const r_vec3d& dir, int recursions_left)
+float r_camera::trace(const r_vec3d& from, const r_vec3d& dir, int recursions_left, r_obj* additional_ignore)
 {
     float nearest_t, nearest_color;
     float t, color;
     r_obj* nearest = NULL;
     for (std::vector<r_obj*>::iterator i = scene->objects.begin(); i != scene->objects.end(); i++)
     {
+        // ignore self object in shading pass
+        if ((*i == ignore_object) || (*i == additional_ignore))
+            continue;
         if ((*i)->intersect(&t, from, dir))
         {
             if ((!nearest) || (t < nearest_t))
@@ -59,19 +63,39 @@ float r_camera::trace(const r_vec3d& from, const r_vec3d& dir, int recursions_le
             }
         }
     }
+
+//     if (shading_pass)
+//         return !nearest;
+    if (shading_pass)
+    {
+        if (!nearest)
+        {
+//                 fprintf(stderr, ".");
+            if (scene->backdrop)
+            {
+                float u = (atan2(dir.x, dir.z) + M_PI) / (2 * M_PI); // -pi to pi
+                float v = acos(dir.y) / M_PI; // 0 to pi
+                return scene->backdrop->sample(u, v);
+            }
+            return 0.1;
+        }
+        else
+            return nearest->light_emitted;
+    }
+    
     if (nearest) {
         r_vec3d p(dir);
         p.multiply(nearest_t);
         p.add(from);
-        if (shading_pass)
-            return 0;
-        else
-            return nearest->shade(from, dir, p, this, recursions_left);
+        return nearest->shade(from, dir, p, this, recursions_left);
     }
-    if (shading_pass)
-        return 1.0;
-    else
-        return dir.y * 1.5 + 0.2;
+    if (scene->backdrop)
+    {
+        float u = (atan2(dir.x, dir.z) + M_PI) / (2 * M_PI); // -pi to pi
+        float v = acos(dir.y) / M_PI; // 0 to pi
+        return scene->backdrop->sample(u, v);
+    }
+    return dir.y * 1.5 + 0.2;
 }
 
 float r_camera::get_color(float sx, float sy, int level, int max_level, int recursions_left)
@@ -80,16 +104,21 @@ float r_camera::get_color(float sx, float sy, int level, int max_level, int recu
     {
         float step = 1.0 / (1 << level);
         float step2 = step * 0.5;
-        return (get_color(sx, sy, level + 1, max_level, recursions_left) +
-                get_color(sx + step2, sy, level + 1, max_level, recursions_left) +
-                get_color(sx, sy + step2, level + 1, max_level, recursions_left) + 
-                get_color(sx + step2, sy + step2, level + 1, max_level, recursions_left)) * 0.25;
+        float c0 = get_color(sx, sy, level + 1, max_level, recursions_left);
+        float c1 = get_color(sx + step2, sy, level + 1, max_level, recursions_left);
+        float c2 = get_color(sx, sy + step2, level + 1, max_level, recursions_left);
+        float c3 = get_color(sx + step2, sy + step2, level + 1, max_level, recursions_left);
+        return (c0 + c1 + c2 + c3) * 0.25;
     }
     else
     {
         r_vec3d v;
         mkray(&v, sx, sy);
-        return trace(from, v, recursions_left);
+        float f = trace(from, v, recursions_left);
+        if (!shading_pass)
+            f = 1.0 - exp(-f * 1);
+
+        return f;
     }
 }
 
@@ -127,19 +156,15 @@ void r_camera::render(FILE* f, int aa_level, int recursions_left, float* _sum)
             {
                 c = get_color(x, y, 0, aa_level, recursions_left);
                 if (shading_pass)
-                {
                     c *= (float)LIGHT_FRAME_MASK[y * LIGHT_FRAME_SIZE + x] / 255.0;
-                }
-                else
-                {
+                sum += c;
+                if (shading_pass)
                     c = 1.0 - exp(-c * 1);
-                    // add some screen space noise
-                    c += (((float)rand() / RAND_MAX) - 0.5) * 0.03;
-                }
+                // add some screen space noise
+//                 c += (((float)rand() / RAND_MAX) - 0.5) * 0.03;
                 // clamp color value
                 if (c < 0.0) c = 0.0; else if (c > 1.0) c = 1.0;
             }
-            sum += c;
             unsigned char color = round(c * 255.0);
             if (f) fprintf(f, "%d ", color);
         }
@@ -148,3 +173,7 @@ void r_camera::render(FILE* f, int aa_level, int recursions_left, float* _sum)
         *_sum = sum * 255.0 / LIGHT_FRAME_SUM;
 }
 
+void r_camera::ignore(r_obj* _ignore_object)
+{
+    ignore_object = _ignore_object;
+}

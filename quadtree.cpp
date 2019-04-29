@@ -51,16 +51,19 @@ r_quadtree::r_quadtree(r_obj* _obj, float x0, float x1, float y0, float y1, floa
             int offset = y * 2 + x;
             float fx = xs + (x << min_level) / scale1;
             float fy = ys + (y << min_level) / scale1;
-            float v = obj->calculate_occlusion(fx, fy, obj->scene);
-            int c = round(v * 255.0);
-            if (c < 0) c = 0;
-            if (c > 255) c = 255;
-            root->v[offset] = c;
+            r_vec3d p;
+            obj->calculate_p_from_uv(fx, fy, &p);
+            float v = obj->calculate_occlusion(p, obj->scene);
+            root->v[offset] = v;
         }
     }
     nodes.push_back(root);
     // load existing quadtree data if available
     load_from_file(obj->lm_path);
+}
+
+r_quadtree::~r_quadtree()
+{
 }
 
 void r_quadtree::insert(float _x, float _y)
@@ -118,24 +121,23 @@ void r_quadtree::insert(float _x, float _y)
                     else
                     {
 //                             fprintf(stderr, "calculate_occlusion for %1.4f, %1.4f\n", px + cx * step, py + cy * step);
-                        float v = obj->calculate_occlusion(px + cx * step, py + cy * step, obj->scene);
-                        int c = round(v * 255.0);
-                        if (c < 0) c = 0;
-                        if (c > 255) c = 255;
-                        node->v[co] = c;
+                        r_vec3d temp;
+                        obj->calculate_p_from_uv(px + cx * step, py + cy * step, &temp);
+                        float v = obj->calculate_occlusion(temp, obj->scene);
+                        node->v[co] = v;
                     }
                 }
             }
         }
-        int min = node->v[0];
-        int max = node->v[0];
+        float min = node->v[0];
+        float max = node->v[0];
         for (int i = 1; i < 4; i++)
         {
             if (node->v[i] < min) min = node->v[i];
             if (node->v[i] > max) max = node->v[i];
         }
 //         fprintf(stderr, "%d %d\n", level, max - min);
-        if ((level >= min_level) && ((max - min) < 16))
+        if ((level >= min_level) && ((max - min) < 0.05))
             break;
 //             fprintf(stderr, "  %d %d\n", cx, cy);
         step *= 0.5;
@@ -173,12 +175,12 @@ float r_quadtree::query(float _x, float _y, bool insert_value)
         level += 1;
         level1 -= 1;
     }
-    int fx = (x >> (level1)) & 0xff;
-    int fy = (y >> (level1)) & 0xff;
-    int lv = ((int)node->v[2] * fy + (int)node->v[0] * (fy ^ 0xff)) >> 8;
-    int rv = ((int)node->v[3] * fy + (int)node->v[1] * (fy ^ 0xff)) >> 8;
-    int v = (rv * fx + lv * (fx ^ 0xff)) >> 8;
-    return (float)v / 255.0;
+    float fx = (float)((x >> (level1)) & 0xff) / 256.0;
+    float fy = (float)((y >> (level1)) & 0xff) / 256.0;
+    float lv = node->v[2] * fy + node->v[0] * (1.0 - fy);
+    float rv = node->v[3] * fy + node->v[1] * (1.0 - fy);
+    float v = rv * fx + lv * (1.0 - fx);
+    return v;
 //     return (node->v[0] + node->v[1] + node->v[2] + node->v[3]) * 0.25 / 255.0;
 }
 
@@ -197,7 +199,7 @@ void r_quadtree::load_from_file(const char* path)
         for (int k = 0; k < 4; k++)
             fread(&node.children[k], 1, 4, f);
         for (int k = 0; k < 4; k++)
-            fread(&node.v[k], 1, 1, f);
+            fread(&node.v[k], 1, 4, f);
         nodes.push_back(new r_node(node));
     }
     fclose(f);
@@ -209,11 +211,11 @@ void r_quadtree::save_to_file(const char* path)
     for (int i = 0; i < nodes.size(); i++)
     {
         r_node* node = nodes.at(i);
-        fwrite(&node->parent, 4, 1, f);
+        fwrite(&node->parent, 1, 4, f);
         for (int k = 0; k < 4; k++)
-            fwrite(&node->children[k], 4, 1, f);
+            fwrite(&node->children[k], 1, 4, f);
         for (int k = 0; k < 4; k++)
-            fwrite(&node->v[k], 1, 1, f);
+            fwrite(&node->v[k], 1, 4, f);
     }
     fclose(f);
 }
@@ -223,7 +225,7 @@ void r_quadtree::dump()
     fprintf(stderr, "\n");
     for (int i = 0; i < nodes.size(); i++)
     {
-        fprintf(stderr, "#%4d p: %4d c: (%4d %4d %4d %4d), v: (%3d, %3d, %3d, %3d)\n",
+        fprintf(stderr, "#%4d p: %4d c: (%4d %4d %4d %4d), v: (%1.2f, %1.2f, %1.2f, %1.2f)\n",
                 i, nodes.at(i)->parent,
                 nodes.at(i)->children[0],
                 nodes.at(i)->children[1],
@@ -237,16 +239,23 @@ void r_quadtree::dump()
     }
 }
 
+unsigned char lm_float_to_byte(float f)
+{
+    f = 1.0 - exp(-f);
+    if (f < 0.0) f = 0.0;
+    if (f > 1.0) f = 1.0;
+    return (unsigned char)round(f * 255.0);
+}
+
 void r_quadtree::save_to_texture_recurse(int mag, unsigned char* buffer, uint32_t p, int level, int x, int y)
 {
     r_node* node = nodes.at(p);
-//     return;
     int width = (1 << (max_level - (level - min_level))) * mag;
     int dim = 1 << max_level;
-    int vl = (int)(nodes.at(p)->v[0]) << 8;
-    int vld = ((int)nodes.at(p)->v[2] - nodes.at(p)->v[0]) * 256 / width;
-    int vr = (int)(nodes.at(p)->v[1]) << 8;
-    int vrd = ((int)nodes.at(p)->v[3] - nodes.at(p)->v[1]) * 256 / width;
+    int vl = (int)(lm_float_to_byte(nodes.at(p)->v[0])) << 8;
+    int vld = ((int)lm_float_to_byte(nodes.at(p)->v[2]) - lm_float_to_byte(nodes.at(p)->v[0])) * 256 / width;
+    int vr = (int)(lm_float_to_byte(nodes.at(p)->v[1])) << 8;
+    int vrd = ((int)lm_float_to_byte(nodes.at(p)->v[3]) - lm_float_to_byte(nodes.at(p)->v[1])) * 256 / width;
     for (int py = 0; py < width; py++)
     {
         int v = vl;
@@ -270,14 +279,14 @@ void r_quadtree::save_to_texture_recurse(int mag, unsigned char* buffer, uint32_
                                         y + cy * width / 2);
         }
     }
-    unsigned char border_color = 0;
-    for (int i = 2; i < width - 2; i++)
-    {
-        buffer[(y + i) * dim * mag + x] = border_color;
-        buffer[(y + i) * dim * mag + x + width] = border_color;
-        buffer[y * dim * mag + x + i] = border_color;
-        buffer[(y + width) * dim * mag + x + i] = border_color;
-    }
+//     unsigned char border_color = 0;
+//     for (int i = 2; i < width - 2; i++)
+//     {
+//         buffer[(y + i) * dim * mag + x] = border_color;
+//         buffer[(y + i) * dim * mag + x + width] = border_color;
+//         buffer[y * dim * mag + x + i] = border_color;
+//         buffer[(y + width) * dim * mag + x + i] = border_color;
+//     }
 }
 
 void r_quadtree::save_to_texture(const char* path)

@@ -1,20 +1,23 @@
 CC = gcc
-CFLAGS = -g
-DEPS = vec3d.h
-OBJ = \
-	camera.o \
-	ciao.o \
-	obj.o \
-	quadtree.o \
-	scene.o \
-	vec3d.o
-	
+CFLAGS =
+LDFLAGS = -lm -lstdc++
 
-%.o: %.cpp $(DEPS)
-	$(CC) $(CFLAGS) -c -o $@ $<
+src = $(wildcard *.cpp)
+obj = $(src:.cpp=.o)
+dep = $(obj:.o=.d)
 
-ciao: $(OBJ)
-	gcc $(CFLAGS) -o $@ $^ -lm -lstdc++
-  
-clean: 
-	rm *.o ciao
+ciao: $(obj)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+-include $(dep)
+
+%.d: %.c
+	@$(CPP) $(CFLAGS) $< -MM -MT $(@:.d=.o) >$@
+
+.PHONY: clean
+clean:
+	rm -f $(obj) ciao
+
+.PHONY: cleandep
+cleandep:
+	rm -f $(dep)

@@ -1,6 +1,7 @@
 #include "scene.h"
 
 r_scene::r_scene()
+    : backdrop(0)
 {
 }
 
@@ -14,3 +15,7 @@ r_scene::~r_scene()
     objects.clear();
 }
 
+void r_scene::add_backdrop(hdr_image* _backdrop)
+{
+    backdrop = _backdrop;
+}

@@ -16,3 +16,5 @@ struct r_vec3d {
     void normalize();
     void cross(const r_vec3d& other);
 };
+
+// END OF FILE

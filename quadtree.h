@@ -10,7 +10,7 @@
 struct r_node {
     uint32_t parent;
     uint32_t children[4];
-    uint8_t v[4];
+    float v[4];
     
     r_node();
     r_node(const r_node& other);
@@ -25,6 +25,7 @@ struct r_quadtree {
     r_obj* obj;
     
     r_quadtree(r_obj* _obj, float x0, float x1, float y0, float y1, float scale, int _extra_levels);
+    virtual ~r_quadtree();
     void insert(float _x, float _y);
     float query(float _x, float _y, bool insert_value = true);
     
