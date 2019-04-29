@@ -4,7 +4,7 @@
 
 struct r_vec3d {
     float x, y, z;
-    
+
     r_vec3d();
     r_vec3d(const r_vec3d& other);
     r_vec3d(float _x, float _y, float _z);
@@ -16,5 +16,3 @@ struct r_vec3d {
     void normalize();
     void cross(const r_vec3d& other);
 };
-
-// END OF FILE

@@ -52,7 +52,7 @@ float r_obj::calculate_occlusion(const r_vec3d& p, r_scene* scene)
 //         f = fopen(filename, "w");
 //     }
     float sum = 0.0;
-    lc.render(f, LIGHT_FRAME_ANTIALIASING, 0, &sum);
+    lc.render(f, LIGHT_FRAME_ANTIALIASING, 0, &sum, 0, 0);
     if (f) fclose(f);
 //         fprintf(stderr, "%1.4f\n", sum);
     return sum;

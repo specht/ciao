@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <vector>
+#include <SDL2/SDL.h>
 
 #include "camera.h"
 #include "hdr_image.h"
@@ -246,7 +247,22 @@ struct r_sphere: r_obj {
 
 int main(int argc, char** argv)
 {
-//     hdr_image* backdrop = new hdr_image("boiler_room_4k.hdr");
+    SDL_Window* window = NULL;
+    SDL_Surface* screenSurface = NULL;
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        fprintf(stderr, "could not initialize sdl2: %s\n", SDL_GetError());
+        return 1;
+    }
+    window = SDL_CreateWindow(
+        "ciao",
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        1920, 1080,
+        SDL_WINDOW_SHOWN
+    );
+    screenSurface = SDL_GetWindowSurface(window);
+    SDL_FillRect(screenSurface, NULL, SDL_MapRGB(screenSurface->format, 0, 0, 0));
+    SDL_UpdateWindowSurface(window);
+//       hdr_image* backdrop = new hdr_image("boiler_room_4k.hdr");
 //     diffuse = new hdr_image("brown_planks_03_diff_4k.hdr", 300);
 //     diffuse = new hdr_image("white_plaster_02_diff_4k.hdr", 300);
     hdr_image* backdrop = new hdr_image("small_hangar_01_8k.hdr");
@@ -287,10 +303,14 @@ int main(int argc, char** argv)
     camera.scene = &scene;
     
     FILE *f = fopen(argv[1], "w");
-    camera.render(f, 2, 3);
+    camera.render(f, 0, 1, 0, window, screenSurface);
     fclose(f);
+    
+    getc(stdin);
 
     delete diffuse;
     delete backdrop;
+    SDL_DestroyWindow(window);
+    SDL_Quit();
     return 0;
 }

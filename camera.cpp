@@ -122,7 +122,7 @@ float r_camera::get_color(float sx, float sy, int level, int max_level, int recu
     }
 }
 
-void r_camera::render(FILE* f, int aa_level, int recursions_left, float* _sum)
+void r_camera::render(FILE* f, int aa_level, int recursions_left, float* _sum, SDL_Window* window, SDL_Surface *surface)
 {
     if (shading_pass && !LIGHT_FRAME_MASK)
     {
@@ -148,6 +148,9 @@ void r_camera::render(FILE* f, int aa_level, int recursions_left, float* _sum)
     float sum = 0;
     for (int y = 0; y < height; y++)
     {
+        uint32_t *target_pixel = 0;
+        if (surface)
+            target_pixel = (uint32_t*)((uint8_t*)surface->pixels + surface->pitch * y);
         for (int x = 0; x < width; x++)
         {
             // in shading pass, skip pixels that don't contribute
@@ -167,7 +170,15 @@ void r_camera::render(FILE* f, int aa_level, int recursions_left, float* _sum)
             }
             unsigned char color = round(c * 255.0);
             if (f) fprintf(f, "%d ", color);
+            if (surface)
+            {
+                uint32_t c = color;
+                c |= c << 8;
+                c |= c << 8;
+                *(target_pixel++) = c;
+            }
         }
+        SDL_UpdateWindowSurface(window);
     }
     if (_sum)
         *_sum = sum * 255.0 / LIGHT_FRAME_SUM;

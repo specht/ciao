@@ -5,6 +5,7 @@
 #include "scene.h"
 #include "vec3d.h"
 #include <stdio.h>
+#include <SDL2/SDL.h>
 
 const int LIGHT_FRAME_SIZE = 64;
 const int LIGHT_FRAME_ANTIALIASING = 0;
@@ -30,6 +31,6 @@ struct r_camera {
     void mkray(r_vec3d* v, float x, float y);
     float trace(const r_vec3d& from, const r_vec3d& dir, int recursions_left, r_obj* additional_ignore = 0);
     float get_color(float sx, float sy, int level, int max_level, int recursions_left);
-    void render(FILE* f = NULL, int aa_level = 0, int recursions_left = 0, float* _sum = NULL);
+    void render(FILE* f = NULL, int aa_level = 0, int recursions_left = 0, float* _sum = NULL, SDL_Window* window = NULL, SDL_Surface *surface = NULL);
     void ignore(r_obj* _ignore_object);
 };

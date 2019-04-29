@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS =
-LDFLAGS = -lm -lstdc++
+LDFLAGS = -lm -lstdc++ -lSDL2
 
 src = $(wildcard *.cpp)
 obj = $(src:.cpp=.o)
