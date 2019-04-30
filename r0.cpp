@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include "render.h"
 
-int width = 160;
-int height = 120;
+int width = 320;
+int height = 240;
 int scale = 1;
-int aa_level = 4;
+int aa_level = 3;
 
 unsigned char get_color(float x, float y)
 {

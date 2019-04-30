@@ -6,6 +6,9 @@ src = $(wildcard *.cpp)
 obj = $(src:.cpp=.o)
 dep = $(obj:.o=.d)
 
+r0: render.o r0.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
 ciao: $(obj)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 

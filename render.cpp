@@ -22,26 +22,24 @@ void destroy_window()
     SDL_Quit();    
 }
 
-unsigned char subdivide(float x, float y, 
-                        unsigned char c00, 
-                        unsigned char c20,
-                        unsigned char c02,
-                        unsigned char c22,
-                        float d, int aa_level,
-                        unsigned char (*get_color)(float x, float y))
+uint8_t subdivide(float x, float y, uint8_t c00, uint8_t c20, uint8_t c02, uint8_t c22,
+                  float d, int aa_level,uint8_t (*get_color)(float x, float y))
 {
-    unsigned char t00 = c00 >> 2;
-    unsigned char t20 = c20 >> 2;
-    unsigned char t02 = c02 >> 2;
-    unsigned char t22 = c22 >> 2;
-    if ((aa_level > 0) && (t00 != t20 || t00 != t02 || t00 != t22 || t20 != t22 || t02 != t22 || t20 != t02))
+    uint8_t min = c00, max = c00;
+    if (c20 < min) min = c20;
+    if (c20 > max) max = c20;
+    if (c02 < min) min = c02;
+    if (c02 > max) max = c02;
+    if (c22 < min) min = c22;
+    if (c22 > max) max = c22;
+    if ((aa_level > 0) && (max - min > 4))
     {
         // pixels are different, recurse
-        unsigned char c10 = get_color(x + d, y);
-        unsigned char c01 = get_color(x, y + d);
-        unsigned char c11 = get_color(x + d, y + d);
-        unsigned char c21 = get_color(x + d * 2, y + d);
-        unsigned char c12 = get_color(x + d, y + d * 2);
+        uint8_t c10 = get_color(x + d, y);
+        uint8_t c01 = get_color(x, y + d);
+        uint8_t c11 = get_color(x + d, y + d);
+        uint8_t c21 = get_color(x + d * 2, y + d);
+        uint8_t c12 = get_color(x + d, y + d * 2);
         return ((int)
             subdivide(x, y, c00, c10, c01, c11, d * 0.5, aa_level - 1, get_color) +
             subdivide(x + d, y, c10, c20, c11, c21, d * 0.5, aa_level - 1, get_color) +
@@ -52,18 +50,18 @@ unsigned char subdivide(float x, float y,
         return ((int)c00 + c20 + c02 + c22) >> 2;
 }
 
-void render(int width, int height, int scale, int aa_level, unsigned char (*get_color)(float x, float y))
+void render(int width, int height, int scale, int aa_level, uint8_t (*get_color)(float x, float y))
 {
     create_window(width, height, scale);
-    unsigned char* line0 = (unsigned char*)malloc(width + 1);
-    unsigned char* line1 = (unsigned char*)malloc(width + 1);
+    uint8_t* line0 = (uint8_t*)malloc(width + 1);
+    uint8_t* line1 = (uint8_t*)malloc(width + 1);
 
     for (int x = 0; x < width + 1; x++)
         line1[x] = get_color(x, 0);
     
     for (int y = 0; y < height; y++)
     {
-        unsigned char* temp = line0; line0 = line1; line1 = temp;
+        uint8_t* temp = line0; line0 = line1; line1 = temp;
         for (int x = 0; x < width + 1; x++)
             line1[x] = get_color(x, y + 1);
         for (int x = 0; x < width; x++)
