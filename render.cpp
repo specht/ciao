@@ -22,16 +22,15 @@ void destroy_window()
     SDL_Quit();    
 }
 
-uint8_t subdivide(float x, float y, uint8_t c00, uint8_t c20, uint8_t c02, uint8_t c22,
+uint8_t subdivide(float x, float y, uint8_t c[4],
                   float d, int aa_level,uint8_t (*get_color)(float x, float y))
 {
-    uint8_t min = c00, max = c00;
-    if (c20 < min) min = c20;
-    if (c20 > max) max = c20;
-    if (c02 < min) min = c02;
-    if (c02 > max) max = c02;
-    if (c22 < min) min = c22;
-    if (c22 > max) max = c22;
+    uint8_t min = c[0], max = c[0];
+    for (int i = 1; i < 4; i++)
+    {
+        if (c[i] < min) min = c[i];
+        if (c[i] > max) max = c[i];
+    }
     if ((aa_level > 0) && (max - min > 4))
     {
         // pixels are different, recurse
@@ -41,13 +40,13 @@ uint8_t subdivide(float x, float y, uint8_t c00, uint8_t c20, uint8_t c02, uint8
         uint8_t c21 = get_color(x + d * 2, y + d);
         uint8_t c12 = get_color(x + d, y + d * 2);
         return ((int)
-            subdivide(x, y, c00, c10, c01, c11, d * 0.5, aa_level - 1, get_color) +
-            subdivide(x + d, y, c10, c20, c11, c21, d * 0.5, aa_level - 1, get_color) +
-            subdivide(x, y + d, c01, c11, c02, c12, d * 0.5, aa_level - 1, get_color) +
-            subdivide(x + d, y + d, c11, c21, c12, c22, d * 0.5, aa_level - 1, get_color)) >> 2;
+            subdivide(x, y, c[0], c10, c01, c11, d * 0.5, aa_level - 1, get_color) +
+            subdivide(x + d, y, c10, c[1], c11, c21, d * 0.5, aa_level - 1, get_color) +
+            subdivide(x, y + d, c01, c11, c[2], c12, d * 0.5, aa_level - 1, get_color) +
+            subdivide(x + d, y + d, c11, c21, c12, c[3], d * 0.5, aa_level - 1, get_color)) >> 2;
     }
     else
-        return ((int)c00 + c20 + c02 + c22) >> 2;
+        return ((int)c[0] + c[1] + c[2] + c[3]) >> 2;
 }
 
 void render(int width, int height, int scale, int aa_level, uint8_t (*get_color)(float x, float y))
