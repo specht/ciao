@@ -42,7 +42,7 @@ struct r_floor_disc: r_obj {
         u_base.normalize();
         v_base = u_base;
         v_base.cross(normal);
-        shading = new r_quadtree(this, -r, r, -r, r, 0.125, 5);
+        shading = new r_quadtree(this, -r, r, -r, r, 0.125, 0);
     }
     
     virtual ~r_floor_disc()
