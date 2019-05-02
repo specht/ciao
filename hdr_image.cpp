@@ -3,6 +3,37 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+
+struct buffered_reader {
+    FILE* f;
+    uint8_t* rbuf;
+    size_t rbuf_size, rbuf_offset;
+    const size_t max_size = 1024 * 1024 * 16;
+    
+    buffered_reader(FILE* _f)
+    {
+        f = _f;
+        rbuf_size = 0;
+        rbuf_offset = 0;
+        rbuf = (uint8_t*)malloc(max_size);
+    }
+    
+    virtual ~buffered_reader()
+    {
+        delete [] rbuf;
+    }
+
+    uint8_t getb()
+    {
+        if (rbuf_offset >= rbuf_size)
+        {
+            rbuf_size = fread(rbuf, 1, max_size, f);
+            rbuf_offset = 0;
+        }
+        return rbuf[rbuf_offset++];
+    }
+};
 
 hdr_image::hdr_image(const char* _path, float _exposure)
     : path(_path), exposure(pow(2, _exposure)), width(0), height(0), buffer(0)
@@ -42,13 +73,13 @@ hdr_image::hdr_image(const char* _path, float _exposure)
     }
     if (width <= 0 || height <= 0)
         nope("invalid dimensions");
-    buffer = new float[width * height];
+    buffer = new float[width * height * 3];
     int buffer_offset = 0;
     unsigned char* scanline = new unsigned char[width * 4];
+    buffered_reader reader(f);
     for (int y = 0; y < height; y++)
     {
-        unsigned char snip[4];
-        fread(snip, 1, 4, f);
+        unsigned char snip[4] = { reader.getb(), reader.getb(), reader.getb(), reader.getb()}; 
         if (snip[0] != 2 || snip[1] != 2 || ((((int)snip[2]) << 8) | snip[3]) != width)
             nope("invalid row format");
         int offset = 0;
@@ -56,11 +87,10 @@ hdr_image::hdr_image(const char* _path, float _exposure)
         {
             while (offset < width * 4)
             {
-                unsigned char b, c;
-                fread(&b, 1, 1, f);
+                uint8_t b = reader.getb();
                 if (b > 0x80)
                 {
-                    fread(&c, 1, 1, f);
+                    uint8_t c = reader.getb();
                     for (int i = 0; i < b - 0x80; i++)
                         scanline[offset++] = c;
                 }
@@ -68,7 +98,7 @@ hdr_image::hdr_image(const char* _path, float _exposure)
                 {
                     for (int i = 0; i < b; i++)
                     {
-                        fread(&c, 1, 1, f);
+                        uint8_t c = reader.getb();
                         scanline[offset++] = c;
                     }
                 }
@@ -76,12 +106,15 @@ hdr_image::hdr_image(const char* _path, float _exposure)
         }
         for (int x = 0; x < width; x++)
         {
-            float r = ((float)scanline[x + 0]) / 255.0;
+            float b = ((float)scanline[x + 0]) / 255.0;
             float g = ((float)scanline[x + width]) / 255.0;
-            float b = ((float)scanline[x + width * 2]) / 255.0;
+            float r = ((float)scanline[x + width * 2]) / 255.0;
             int e = scanline[x + width * 3];
-            float grey = (r * 0.299 + g * 0.587 + b * 0.114) * pow(2, e - 128);
-            buffer[buffer_offset++] = grey;
+            float f = pow(2, e - 128);
+            r *= f; g *= f; b *= f;
+            buffer[buffer_offset++] = b;
+            buffer[buffer_offset++] = g;
+            buffer[buffer_offset++] = r;
         }
     }
     delete [] scanline;
@@ -100,9 +133,8 @@ void hdr_image::nope(const char* message)
     exit(1);
 }
 
-float hdr_image::sample(float u, float v)
+void hdr_image::sample(float u, float v, rgb* result)
 {
-//     return 1.0;
     u *= width;
     v *= height;
     int x0 = ((int)floor(u)) % width;
@@ -111,8 +143,10 @@ float hdr_image::sample(float u, float v)
     int y1 = (y0 + 1) % height;
     float fx = u - (int)floor(u);
     float fy = v - (int)floor(v);
-    float l = buffer[y0 * width + x0] * (1 - fy) + buffer[y1 * width + x0] * fy;
-    float r = buffer[y0 * width + x1] * (1 - fy) + buffer[y1 * width + x1] * fy;
-    float result = l * (1 - fx) + r * fx;
-    return result * exposure;
+    for (int i = 0; i < 3; i++)
+    {
+        float l = buffer[(y0 * width + x0) * 3 + i] * (1 - fy) + buffer[(y1 * width + x0) * 3 + i] * fy;
+        float r = buffer[(y0 * width + x1) * 3 + i] * (1 - fy) + buffer[(y1 * width + x1) * 3 + i] * fy;
+        result->c[i] = (l * (1 - fx) + r * fx) * exposure;
+    }
 }

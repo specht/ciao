@@ -1,7 +1,7 @@
 #include "scene.h"
 
 r_scene::r_scene()
-    : backdrop(0)
+    : backdrop(0), camera(0)
 {
 }
 

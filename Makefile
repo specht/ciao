@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS =
+CFLAGS = -g
 LDFLAGS = -lm -lstdc++ -lSDL2
 
 src = $(wildcard *.cpp)
@@ -9,7 +9,7 @@ dep = $(obj:.o=.d)
 r0: render.o r0.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-ciao: $(obj)
+ciao: camera.o ciao.o hdr_image.o obj.o quadtree.o render.o scene.o vec3d.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 -include $(dep)

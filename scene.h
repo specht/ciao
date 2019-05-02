@@ -5,6 +5,7 @@
 #include <vector>
 
 struct r_obj;
+struct r_camera;
 
 struct r_scene {
     std::vector<r_obj*> objects;
@@ -13,4 +14,5 @@ struct r_scene {
     
     hdr_image* backdrop;
     void add_backdrop(hdr_image* _backdrop);
+    r_camera* camera;
 };
