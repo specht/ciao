@@ -111,10 +111,14 @@ hdr_image::hdr_image(const char* _path, float _exposure)
             float r = ((float)scanline[x + width * 2]) / 255.0;
             int e = scanline[x + width * 3];
             float f = pow(2, e - 128);
-            r *= f; g *= f; b *= f;
-            buffer[buffer_offset++] = b;
-            buffer[buffer_offset++] = g;
-            buffer[buffer_offset++] = r;
+            r_color rgb(r * f, g * f, b * f);
+            r_color lab;
+            rgb.rgb_to_lab(&lab);
+            // convert RGB to CIELab and only scale L
+//             lab.l *= f;
+            buffer[buffer_offset++] = lab.l;
+            buffer[buffer_offset++] = lab.a;
+            buffer[buffer_offset++] = lab.b;
         }
     }
     delete [] scanline;
@@ -133,8 +137,11 @@ void hdr_image::nope(const char* message)
     exit(1);
 }
 
-void hdr_image::sample(float u, float v, rgb* result)
+void hdr_image::sample(float u, float v, r_color* result)
 {
+//     r_color c(0.5, 0.5, 0.5);
+//     c.rgb_to_lab(result);
+//     return;
     u *= width;
     v *= height;
     int x0 = ((int)floor(u)) % width;

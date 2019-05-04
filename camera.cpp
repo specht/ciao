@@ -53,7 +53,7 @@ void r_camera::mkray(r_vec3d* v, float x, float y)
     v->normalize();
 }
 
-void r_camera::trace(const r_vec3d& from, const r_vec3d& dir, rgb* color, int recursions_left, r_obj* additional_ignore)
+void r_camera::trace(const r_vec3d& from, const r_vec3d& dir, r_color* color, int recursions_left, r_obj* additional_ignore)
 {
     if (shading_backdrop_pass)
     {
@@ -106,9 +106,9 @@ void r_camera::trace(const r_vec3d& from, const r_vec3d& dir, rgb* color, int re
     if (shading_pass)
     {
         if (nearest)
-            *color = rgb(0, 0, 0);
+            *color = r_color(0, 0, 0);
         else
-            *color = rgb(1, 1, 1);
+            *color = r_color(1, 1, 1);
 //         {
 //             float u = (atan2(dir.x, dir.z) + M_PI) / (2 * M_PI); // -pi to pi
 //             float v = acos(dir.y) / M_PI; // 0 to pi
@@ -222,7 +222,7 @@ void r_camera::ignore(r_obj* _ignore_object)
     ignore_object = _ignore_object;
 }
 
-void r_camera::get_color(float x, float y, rgb* color)
+void r_camera::get_color(float x, float y, r_color* color)
 {
     r_vec3d v;
     mkray(&v, x, y);
@@ -230,12 +230,18 @@ void r_camera::get_color(float x, float y, rgb* color)
     trace(from, v, color, recursions_left);
     if (shading_backdrop_pass)
     {
-        color->r *= pow(v.y, 2);
-        color->g *= pow(v.y, 2);
-        color->b *= pow(v.y, 2);
+        float f = 1.0 - ((1.0 - v.y) / 0.8435655);
+        if (f < 0)
+            f = 0;
+        color->r *= v.y * f;
+        color->g *= v.y * f;
+        color->b *= v.y * f;
     }
     if (!shading_pass)
     {
+//         color->l = 1.0 - exp(-color->l);
+        r_color temp(*color);
+        temp.lab_to_rgb(color);
         for (int i = 0; i < 3; i++)
             color->c[i] = 1.0 - exp(-color->c[i]);
     }

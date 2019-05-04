@@ -4,7 +4,7 @@ struct r_quadtree;
 
 #include "vec3d.h"
 #include <vector>
-#include "rgb.h"
+#include "color.h"
 
 struct r_scene;
 
@@ -19,7 +19,7 @@ struct r_obj {
     virtual ~r_obj();
     
     virtual bool intersect(float* t, const r_vec3d& from, const r_vec3d& dir) = 0;
-    virtual void shade(const r_vec3d& from, const r_vec3d& dir, const r_vec3d& p, void* camera, int recursions_left, rgb* result) = 0;
+    virtual void shade(const r_vec3d& from, const r_vec3d& dir, const r_vec3d& p, void* camera, int recursions_left, r_color* result) = 0;
     float calculate_occlusion(const r_vec3d& p, r_scene* scene);
     virtual void calculate_uv(const r_vec3d& p, float* u, float *v) = 0;
     virtual void calculate_p_from_uv(float u, float v, r_vec3d* p) = 0;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "color.h"
 #include "hdr_image.h"
 #include "obj.h"
 #include "render.h"
@@ -33,7 +34,7 @@ struct r_camera: r_renderer {
              const r_vec3d& _up
             );
     void mkray(r_vec3d* v, float x, float y);
-    void trace(const r_vec3d& from, const r_vec3d& dir, rgb* color, int recursions_left, r_obj* additional_ignore = 0);
+    void trace(const r_vec3d& from, const r_vec3d& dir, r_color* color, int recursions_left, r_obj* additional_ignore = 0);
     void ignore(r_obj* _ignore_object);
-    virtual void get_color(float x, float y, rgb* color);
+    virtual void get_color(float x, float y, r_color* color);
 };

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "camera.h"
+#include "color.h"
 #include "hdr_image.h"
 #include "obj.h"
 #include "quadtree.h"
@@ -43,7 +44,7 @@ struct r_floor_disc: r_obj {
         u_base.normalize();
         v_base = u_base;
         v_base.cross(normal);
-        shading = new r_quadtree(this, -r, r, -r, r, 0.125, 3);
+        shading = new r_quadtree(this, -r, r, -r, r, 0.125, 0);
     }
     
     virtual ~r_floor_disc()
@@ -104,7 +105,7 @@ struct r_floor_disc: r_obj {
         *tangent = u_base;
     }
     
-    virtual void shade(const r_vec3d& from, const r_vec3d& dir, const r_vec3d& p, void* camera, int recursions_left, rgb* result)
+    virtual void shade(const r_vec3d& from, const r_vec3d& dir, const r_vec3d& p, void* camera, int recursions_left, r_color* result)
     {
         r_vec3d temp(p);
         temp.subtract(anchor);
@@ -164,7 +165,7 @@ struct r_sphere: r_obj {
         return false;
     }
     
-    virtual void shade(const r_vec3d& from, const r_vec3d& dir, const r_vec3d& p, void* camera, int recursions_left, rgb* result)
+    virtual void shade(const r_vec3d& from, const r_vec3d& dir, const r_vec3d& p, void* camera, int recursions_left, r_color* result)
     {
         float u, v;
         calculate_uv(p, &u, &v);
@@ -185,7 +186,7 @@ struct r_sphere: r_obj {
 
         if (((r_camera*)camera)->shading_pass)
         {
-            *result = rgb(0, 0, 0);
+            *result = r_color(0, 0, 0);
             return;
         }
         if (recursions_left > 0)
@@ -254,10 +255,17 @@ int main(int argc, char** argv)
 //       hdr_image* backdrop = new hdr_image("boiler_room_4k.hdr");
 //     diffuse = new hdr_image("brown_planks_03_diff_4k.hdr", 300);
 //     diffuse = new hdr_image("white_plaster_02_diff_4k.hdr", 300);
-//     hdr_image* backdrop = new hdr_image("small_hangar_01_4k.hdr");
+     hdr_image* backdrop = new hdr_image("small_hangar_01_8k.hdr");
+//      hdr_image* backdrop = new hdr_image("flower_road_8k.hdr");
+//      hdr_image* backdrop = new hdr_image("whipple_creek_regional_park_01_8k.hdr");
+//      hdr_image* backdrop = new hdr_image("lythwood_field_8k.hdr");
+//      hdr_image* backdrop = new hdr_image("schadowplatz_8k.hdr");
+     
+     
+//      exit(1);
 //     hdr_image* backdrop = new hdr_image("venice_sunset_8k.hdr");
 //     exit(0);
-    hdr_image* backdrop = new hdr_image("paul_lobe_haus_8k.hdr");
+//    hdr_image* backdrop = new hdr_image("paul_lobe_haus_8k.hdr");
 //     hdr_image* backdrop = new hdr_image("pool_8k.hdr");
 //     hdr_image* backdrop = new hdr_image("zhengyang_gate_8k.hdr");
     scene.add_backdrop(backdrop);
@@ -274,7 +282,7 @@ int main(int argc, char** argv)
         float r = 0.05 + 0.2 * pow((float)i / 32, 2.0);
         scene.objects.push_back(new r_sphere(&scene, r_vec3d(x, r + 0.0001, y), r, 0.0, 1.0));
     }
-    camera = r_camera(1920 / 4, 1080 / 4, 20.0 / 180.0 * M_PI,
+    camera = r_camera(1366 / 3, 768 / 3, 20.0 / 180.0 * M_PI,
         r_vec3d(-1, 0.3, -3),
         r_vec3d(0.0, 0.2, 0),
         r_vec3d(0, 1, 0)
